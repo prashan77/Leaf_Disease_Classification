@@ -42,7 +42,6 @@ import csv
 import hashlib
 import json
 from collections import defaultdict
-from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -54,6 +53,11 @@ def load_manifest(root: Path, variant: str) -> list[dict]:
     if not rows:
         raise SystemExit(f"No rows for variant={variant}. Run scripts/prepare_data.py first.")
     return rows
+
+
+def has_verified_leaf_id(row: dict) -> bool:
+    """Only these groups can support the no-cross-leaf guarantee."""
+    return ":::solo_" not in row["leaf_id"]
 
 
 def shuffled_leaves_per_class(rows: list[dict], seed: int) -> dict[str, list[str]]:
@@ -145,7 +149,23 @@ def main() -> None:
                          "0 disables it (see warning)")
     ap.add_argument("--holdout-ratio", type=float, default=0.8,
                     help="ratio defining the fixed evaluation holdout")
+    ap.add_argument(
+        "--include-unverified-leaves",
+        action="store_true",
+        help="include singleton fallback groups; this weakens the leaf-leakage guarantee",
+    )
     args = ap.parse_args()
+
+    if not 0 <= args.val_frac < 1:
+        ap.error("--val-frac must be in [0, 1).")
+    if not 0 < args.holdout_ratio < 1:
+        ap.error("--holdout-ratio must be in (0, 1).")
+    invalid_ratios = [ratio for ratio in args.ratios if not 0 < ratio <= args.holdout_ratio]
+    if invalid_ratios:
+        ap.error(
+            "Each --ratio must be in (0, --holdout-ratio] so test_fixed remains "
+            f"a subset of test; got {invalid_ratios}."
+        )
 
     if args.val_frac == 0:
         print("!! val_frac=0: train.py will have to checkpoint on the test set.")
@@ -156,6 +176,12 @@ def main() -> None:
 
     for variant in args.variants:
         rows = load_manifest(args.root, variant)
+        if not args.include_unverified_leaves:
+            total = len(rows)
+            rows = [row for row in rows if has_verified_leaf_id(row)]
+            print(f"  {variant}: excluded {total - len(rows)} unverified-leaf images")
+        elif any(not has_verified_leaf_id(row) for row in rows):
+            print("  !! including unverified singleton groups; leakage cannot be ruled out")
         leaves_by_class = shuffled_leaves_per_class(rows, args.seed)
         n_leaves = sum(len(v) for v in leaves_by_class.values())
         print(f"  {variant}: {len(rows)} images across {n_leaves} physical leaves "
@@ -165,13 +191,13 @@ def main() -> None:
             split = build_split(rows, leaves_by_class, ratio, args.val_frac, args.holdout_ratio)
             sanity_check(split, ratio)
 
-            # color and grayscale must resolve to identical relpaths, otherwise
-            # the color-vs-grayscale comparison is not controlled
+            # Color and grayscale must resolve to identical partition paths,
+            # otherwise the comparison is not controlled.
             if ratio in reference:
-                assert split["train"] == reference[ratio], \
-                    f"{variant} train differs from the first variant at ratio {ratio}"
+                assert split == reference[ratio], \
+                    f"{variant} split differs from the first variant at ratio {ratio}"
             else:
-                reference[ratio] = split["train"]
+                reference[ratio] = split
 
             payload = {
                 "variant": variant,
@@ -181,7 +207,7 @@ def main() -> None:
                 "stratified_by": "class",
                 "nested": True,
                 "val_frac": args.val_frac,
-                "created_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "includes_unverified_leaves": args.include_unverified_leaves,
                 **split,
             }
             path = args.out / f"{variant}_{ratio:g}_{args.seed}.json"

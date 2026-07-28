@@ -1,5 +1,4 @@
 """
-
 A plain CNN, no pretrained weights, no inverted residuals -- the kind of
 architecture MobileNetV2 is implicitly being compared against in spirit
 
@@ -63,16 +62,18 @@ class VanillaCNN(nn.Module):
 
 def train_one_epoch(model, loader, opt, device) -> float:
     model.train()
-    total_loss, n = 0.0, 0
+    total_loss, correct, n = 0.0, 0, 0
     for x, y in tqdm(loader):
         x, y = x.to(device), y.to(device)
         opt.zero_grad()
-        loss = F.cross_entropy(model(x), y)
+        logits = model(x)
+        loss = F.cross_entropy(logits, y)
         loss.backward()
         opt.step()
         total_loss += loss.item() * x.size(0)
+        correct += (logits.argmax(dim=1) == y).sum().item()
         n += x.size(0)
-    return total_loss / n
+    return total_loss / n, correct/ n
 
 
 @torch.no_grad()
@@ -105,12 +106,12 @@ def main():
     best_val_acc = None
     for epoch in range(1, epochs + 1):
         t0 = time.time()
-        train_loss = train_one_epoch(model, train_loader, opt, device)
+        train_loss, train_acc = train_one_epoch(model, train_loader, opt, device)
         val_loss, val_acc = evaluate(model, val_loader, device)
         if best_val_acc is None or best_val_acc < val_acc:
             best_state = copy.deepcopy(model.state_dict())
             best_val_acc = val_acc
-        print(f"epoch {epoch:>2}/{epochs}  train_loss={train_loss:.3f}  "
+        print(f"epoch {epoch:>2}/{epochs}  train_loss={train_loss:.3f}  train_acc={train_acc:.3f} "
               f"val_loss={val_loss:.3f}  val_acc={val_acc:.3f}  "
               f"({time.time() - t0:.1f}s)")
     model.load_state_dict(best_state)

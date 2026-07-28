@@ -31,6 +31,8 @@ import zipfile
 from collections import Counter, defaultdict
 from pathlib import Path
 
+IMAGE_SUFFIXES = frozenset({".jpg", ".jpeg", ".png"})
+
 EXPECTED_CLASSES = 38
 EXPECTED_IMAGES = 54_305  # confirmed against HF's 43,596 train + 10,709 test
 
@@ -159,10 +161,23 @@ def resolve_leaf_id(key: str, class_name: str, leaf_map: dict) -> tuple[str, boo
 def build_manifest(root: Path, variants: list[str], leaf_map: dict) -> None:
     print("[2/4] building manifest with leaf grouping")
 
-    color_dir = root / "raw" / variants[0]
-    classes = sorted(p.name for p in color_dir.iterdir() if p.is_dir())
+    reference_variant = variants[0]
+    reference_dir = root / "raw" / reference_variant
+    classes = sorted(p.name for p in reference_dir.iterdir() if p.is_dir())
     if len(classes) != EXPECTED_CLASSES:
         print(f"  !! found {len(classes)} classes, expected {EXPECTED_CLASSES}")
+
+    expected_classes = set(classes)
+    for variant in variants[1:]:
+        found_classes = {p.name for p in (root / "raw" / variant).iterdir() if p.is_dir()}
+        if found_classes != expected_classes:
+            missing = sorted(expected_classes - found_classes)
+            extra = sorted(found_classes - expected_classes)
+            raise ValueError(
+                f"Class directories for {variant} differ from {reference_variant}; "
+                f"missing={missing}, extra={extra}"
+            )
+
     label_of = {c: i for i, c in enumerate(classes)}
     (root / "classes.json").write_text(json.dumps(classes, indent=2))
 
@@ -175,10 +190,9 @@ def build_manifest(root: Path, variants: list[str], leaf_map: dict) -> None:
         for class_name in classes:
             cdir = vdir / class_name
             if not cdir.is_dir():
-                print(f"  !! missing {variant}/{class_name}")
-                continue
+                raise FileNotFoundError(f"Missing class directory: {variant}/{class_name}")
             for img in sorted(cdir.iterdir()):
-                if not img.is_file():
+                if not img.is_file() or img.suffix.lower() not in IMAGE_SUFFIXES:
                     continue
                 key = leaf_key(img.name)
                 lid, ok = resolve_leaf_id(key, class_name, leaf_map)
@@ -201,7 +215,10 @@ def build_manifest(root: Path, variants: list[str], leaf_map: dict) -> None:
     total = matched + unmatched
     print(f"  leaf-map coverage: {matched}/{total} ({100 * matched / max(total, 1):.1f}%)")
     if unmatched:
-        print(f"  {unmatched} images fell back to singleton groups (safe, not leaky)")
+        print(
+            f"  {unmatched} images lack verified leaf groups. They are represented as "
+            "singletons and are excluded from default splits to avoid possible leakage."
+        )
         _warn_uncovered_classes(rows, variants[0])
     for v, n in per_variant.items():
         flag = "" if n == EXPECTED_IMAGES else f"  <-- expected {EXPECTED_IMAGES}"
@@ -212,12 +229,10 @@ def build_manifest(root: Path, variants: list[str], leaf_map: dict) -> None:
 
 def _warn_uncovered_classes(rows: list[dict], variant: str) -> None:
     """
-    Flag classes where leaf-map.json coverage is low/zero. This isn't a bug in
-    the matching logic -- some classes (or photography batches within a class)
-    were never leaf-tracked upstream, so there's no leaf identity to recover.
-    Below ~50% it's worth calling out per class rather than burying it in the
-    aggregate percentage, since it means that class's "leaf-grouped" split is
-    effectively (or fully) an image-level split.
+    Flag classes where leaf-map.json coverage is low/zero. Some classes (or
+    photography batches within a class) were never leaf-tracked upstream, so
+    there is no leaf identity to recover. Such images are excluded from the
+    default leak-safe split, rather than being treated as safe singleton groups.
     """
     per_class = Counter()
     per_class_matched = Counter()
@@ -234,7 +249,7 @@ def _warn_uncovered_classes(rows: list[dict], variant: str) -> None:
     ]
     if not flagged:
         return
-    print("  low/zero leaf-map coverage by class (grouped split ~= image-level split there):")
+    print("  low/zero verified leaf-map coverage by class:")
     for c, matched, n in sorted(flagged, key=lambda t: t[1] / t[2]):
         print(f"    {c}: {matched}/{n} ({100 * matched / n:.0f}%)")
 

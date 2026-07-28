@@ -64,10 +64,11 @@ team should get identical digests -- if yours differs, something upstream
 
 Three properties, chosen deliberately:
 
-- **Leaf-grouped** -- every photo of one physical leaf lands on the same side
-  of the split, using `leaf_id` from the manifest. PlantVillage shoots each
-  leaf multiple times; a random image-level split would leak near-duplicates
-  into test and inflate every reported number.
+- **Leaf-grouped** -- by default, only images with a verified `leaf_id` are
+  included, so every known photo of one physical leaf lands on the same side
+  of the split. PlantVillage shoots each leaf multiple times; a random
+  image-level split would leak near-duplicates into test and inflate every
+  reported number.
 - **Class-stratified** -- the shuffle-and-cut happens within each class, not
   globally, since class sizes range ~150-5500 images (36x imbalance). A global
   cut can starve a rare class's train or test set.
@@ -121,14 +122,13 @@ and partial (30-52%) for `Tomato___Late_blight`, `Tomato___Septoria_leaf_spot`,
 `Strawberry___Leaf_scorch` -- these mix an `RS_*`-named (leaf-tracked) batch
 with a `GHLB*`-named (greenhouse) batch that was never leaf-tracked upstream.
 
-This isn't a matching bug: unmatched images fall back to singleton leaf
-groups, which is conservative, not leaky (it can only split a leaf's photos
-apart, never merge two distinct leaves). It does mean that for the classes
-above, the "leaf-grouped" split is effectively -- or fully -- an image-level
-split. Keep that in mind when comparing macro-F1 across classes: those
-classes aren't benefiting from leak-safe grouping the way most others are.
-`prepare_data.py` prints a per-class breakdown of any class under 50%
-coverage on every run so this stays visible.
+Unmatched images are represented as singleton groups in the manifest, but a
+singleton cannot prove that it is a distinct physical leaf. The default split
+generator excludes them, yielding a smaller but leak-safer evaluation set.
+Pass `--include-unverified-leaves` only when retaining all images matters more
+than that guarantee; report the resulting leakage risk as a limitation.
+`prepare_data.py` prints a per-class breakdown of any class under 50% coverage
+on every run so this stays visible.
 
 ## License
 
