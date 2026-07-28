@@ -44,7 +44,7 @@ def evaluate(model, loader, device) -> tuple[float, float]:
 
 
 def main(pretrained):
-    device = "cpu" #"mps" if torch.backends.mps.is_available() else ("cuda" if torch.cuda.is_available() else "cpu")
+    device = "mps" if torch.backends.mps.is_available() else ("cuda" if torch.cuda.is_available() else "cpu")
     print(f"device: {device}")
 
     variant, ratio, seed, batch_size, epochs = "color", 0.8, 42, 64, 5
