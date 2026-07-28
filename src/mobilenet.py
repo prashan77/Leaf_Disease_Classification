@@ -1,5 +1,5 @@
 import time
- 
+import copy 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -44,25 +44,33 @@ def evaluate(model, loader, device) -> tuple[float, float]:
 
 
 def main(pretrained):
-    device = "mps" if torch.backends.mps.is_available() else ("cuda" if torch.cuda.is_available() else "cpu")
+    device = "cpu" #"mps" if torch.backends.mps.is_available() else ("cuda" if torch.cuda.is_available() else "cpu")
     print(f"device: {device}")
 
-    variant, ratio, seed, batch_size, epochs = "color", 0.8, 42, 64, 3
+    variant, ratio, seed, batch_size, epochs = "color", 0.8, 42, 64, 5
     lr = 1e-4 if pretrained else 1e-3
-    train_loader, test_loader = get_dataloaders(variant, ratio, seed, batch_size, num_workers=2)
+    train_loader, val_loader, test_loader = get_dataloaders(variant, ratio, seed, batch_size, return_val=True, num_workers=4)
     model = build_model(pretrained, num_classes=38).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
 
-    print(f"train images: {len(train_loader.dataset):,}  test images: {len(test_loader.dataset):,}")
+    print(f"train images: {len(train_loader.dataset):,}  val images: {len(val_loader.dataset):,}  test images: {len(test_loader.dataset):,}")
 
+    best_state = None
+    best_val_acc = None
     for epoch in range(1, epochs + 1):
         t0 = time.time()
         train_loss = train_one_epoch(model, train_loader, opt, device)
-        val_loss, val_acc = evaluate(model, test_loader, device)
+        val_loss, val_acc = evaluate(model, val_loader, device)
+        if best_val_acc is None or best_val_acc < val_acc:
+            best_state = copy.deepcopy(model.state_dict())
+            best_val_acc = val_acc
         print(f"epoch {epoch:>2}/{epochs}  train_loss={train_loss:.3f}  "
-                f"val_loss={val_loss:.3f}  val_acc={val_acc:.3f}  "
-                f"({time.time() - t0:.1f}s)")
-
+              f"val_loss={val_loss:.3f}  val_acc={val_acc:.3f}  "
+              f"({time.time() - t0:.1f}s)")
+    model.load_state_dict(best_state)
+    test_loss, test_acc = evaluate(model, test_loader, device)
+    print(f"test_loss={test_loss:.3f}  test_acc={test_acc:.3f} ")
 
 if __name__ == "__main__":
     main(True)
+    main(False)
