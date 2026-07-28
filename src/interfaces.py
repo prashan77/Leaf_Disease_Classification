@@ -13,11 +13,11 @@ from torch.utils.data import DataLoader
 
 def get_dataloaders(variant: str, ratio: float, seed: int, batch_size: int
                      ) -> tuple[DataLoader, DataLoader]:
-    """Yields (img: Tensor[B,3,224,224], label: Tensor[B]), labels 0..37."""
+    """Yields (img: Tensor[B,3,224,224], label: Tensor[B]), labels 0..29."""
     raise NotImplementedError
 
 
-def build_model(pretrained: bool, num_classes: int = 38) -> nn.Module:
+def build_model(pretrained: bool, num_classes: int = 30) -> nn.Module:
     """Pretrained and random-init paths must produce byte-identical architectures."""
     raise NotImplementedError
 

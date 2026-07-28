@@ -28,7 +28,7 @@ class VanillaCNN(nn.Module):
     Output: (B, num_classes) logits.
     """
 
-    def __init__(self, num_classes: int = 38, dropout: float = 0.3):
+    def __init__(self, num_classes: int = 30, dropout: float = 0.3):
         super().__init__()
 
         def block(c_in, c_out):
@@ -96,7 +96,7 @@ def main():
     variant, ratio, seed, batch_size, epochs, lr = "color", 0.8, 42, 64, 5, 1e-3
 
     train_loader, val_loader, test_loader = get_dataloaders(variant, ratio, seed, batch_size, return_val=True, num_workers=2)
-    model = VanillaCNN(num_classes=38).to(device)
+    model = VanillaCNN(num_classes=30).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
 
     print(f"params: {model.num_params():,}")

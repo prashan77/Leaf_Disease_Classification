@@ -7,13 +7,22 @@ Assumes data.zip and leaf_grouping/leaf-map.json are already sitting under
 script does NOT hit the network. If either input is missing, it tells you
 what to fetch and exits.
 
+Scope decision: classes with zero leaf-map-verified images are dropped
+entirely, not just from the default split. A class where every image is an
+unverified singleton can never produce a leak-safe split no matter what
+make_splits.py does downstream, so there's no honest way to keep it in a
+38-class task. classes.json, class_counts.csv, and manifest.csv all reflect
+only the classes that survive this filter -- see build_manifest.
+
 Outputs (small text files, safe to commit):
-    <root>/manifest.csv        one row per image, per variant, with leaf_id
-    <root>/class_counts.csv    class-count table (GM3 needs this for macro-F1)
-    <root>/classes.json        frozen label ordering -> int index
+    <root>/manifest.csv        one row per kept image, per variant, with leaf_id
+    <root>/class_counts.csv    class-count table for the kept classes (GM3 needs
+                                this for macro-F1 interpretation)
+    <root>/classes.json        frozen label ordering -> int index, kept classes only
 
 Images themselves land at <root>/raw/{variant}/{class}/*.JPG and should be
-gitignored.
+gitignored. Dropped classes' images are still extracted (extraction doesn't
+know about leaf coverage) -- they just never make it into the manifest.
 
 Usage:
     python -m scripts.prepare_data --root data
@@ -123,9 +132,9 @@ def resolve_leaf_id(key: str, class_name: str, leaf_map: dict) -> tuple[str, boo
     """
     A key can map to several classes (same photo token reused across e.g.
     Soybean___healthy and Apple___healthy), so disambiguate by directory when
-    possible. Unmatched/ambiguous images become singleton groups -- safe: this
-    can only split leaves apart, never merge distinct ones, so it cannot
-    introduce leakage.
+    possible. Unmatched/ambiguous images become singleton groups -- the bool
+    returned here is False for those, and build_manifest uses it to decide
+    which classes have any verified leaf identity at all.
 
     One wrinkle discovered against the real map: some keys carry an older or
     differently-spelled class label than the current manifest (e.g. the map's
@@ -163,11 +172,11 @@ def build_manifest(root: Path, variants: list[str], leaf_map: dict) -> None:
 
     reference_variant = variants[0]
     reference_dir = root / "raw" / reference_variant
-    classes = sorted(p.name for p in reference_dir.iterdir() if p.is_dir())
-    if len(classes) != EXPECTED_CLASSES:
-        print(f"  !! found {len(classes)} classes, expected {EXPECTED_CLASSES}")
+    all_classes = sorted(p.name for p in reference_dir.iterdir() if p.is_dir())
+    if len(all_classes) != EXPECTED_CLASSES:
+        print(f"  !! found {len(all_classes)} classes, expected {EXPECTED_CLASSES}")
 
-    expected_classes = set(classes)
+    expected_classes = set(all_classes)
     for variant in variants[1:]:
         found_classes = {p.name for p in (root / "raw" / variant).iterdir() if p.is_dir()}
         if found_classes != expected_classes:
@@ -178,16 +187,12 @@ def build_manifest(root: Path, variants: list[str], leaf_map: dict) -> None:
                 f"missing={missing}, extra={extra}"
             )
 
-    label_of = {c: i for i, c in enumerate(classes)}
-    (root / "classes.json").write_text(json.dumps(classes, indent=2))
-
-    rows = []
-    matched = unmatched = 0
-    per_variant = Counter()
-
+    # Pass 1: every image, every class -- resolve leaf identity before
+    # deciding what to keep.
+    all_rows = []
     for variant in variants:
         vdir = root / "raw" / variant
-        for class_name in classes:
+        for class_name in all_classes:
             cdir = vdir / class_name
             if not cdir.is_dir():
                 raise FileNotFoundError(f"Missing class directory: {variant}/{class_name}")
@@ -195,44 +200,73 @@ def build_manifest(root: Path, variants: list[str], leaf_map: dict) -> None:
                 if not img.is_file() or img.suffix.lower() not in IMAGE_SUFFIXES:
                     continue
                 key = leaf_key(img.name)
-                lid, ok = resolve_leaf_id(key, class_name, leaf_map)
-                matched += ok
-                unmatched += not ok
-                per_variant[variant] += 1
-                rows.append({
+                lid, verified = resolve_leaf_id(key, class_name, leaf_map)
+                all_rows.append({
                     "relpath": f"{class_name}/{img.name}",
                     "variant": variant,
                     "class_name": class_name,
-                    "label": label_of[class_name],
                     "leaf_id": lid,
+                    "verified": verified,
                 })
+
+    # A class with zero verified images can never yield a leak-safe split --
+    # counted once, off one variant, since verification doesn't depend on
+    # color vs. grayscale processing of the same photo.
+    verified_counts = Counter(
+        r["class_name"] for r in all_rows if r["variant"] == reference_variant and r["verified"]
+    )
+    kept_classes = sorted(c for c in all_classes if verified_counts[c] > 0)
+    dropped_classes = sorted(set(all_classes) - set(kept_classes))
+
+    if dropped_classes:
+        dropped_counts = Counter(
+            r["class_name"] for r in all_rows
+            if r["variant"] == reference_variant and r["class_name"] in dropped_classes
+        )
+        print(f"  dropping {len(dropped_classes)} classes with zero verified leaf coverage "
+              "(no leak-safe split is possible for them):")
+        for c in dropped_classes:
+            print(f"    {c}: {dropped_counts[c]} images excluded")
+
+    label_of = {c: i for i, c in enumerate(kept_classes)}
+    (root / "classes.json").write_text(json.dumps(kept_classes, indent=2))
+
+    rows = [r for r in all_rows if r["class_name"] in label_of]
+    for r in rows:
+        r["label"] = label_of[r["class_name"]]
+        del r["verified"]
 
     with open(root / "manifest.csv", "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=["relpath", "variant", "class_name", "label", "leaf_id"])
         w.writeheader()
         w.writerows(rows)
 
-    total = matched + unmatched
-    print(f"  leaf-map coverage: {matched}/{total} ({100 * matched / max(total, 1):.1f}%)")
+    matched = sum(1 for r in rows if ":::solo_" not in r["leaf_id"])
+    unmatched = len(rows) - matched
+    print(f"  leaf-map coverage (kept classes only): {matched}/{len(rows)} "
+          f"({100 * matched / max(len(rows), 1):.1f}%)")
     if unmatched:
         print(
-            f"  {unmatched} images lack verified leaf groups. They are represented as "
-            "singletons and are excluded from default splits to avoid possible leakage."
+            f"  {unmatched} images among the kept classes still lack a verified leaf "
+            "group. They are excluded from the default split (make_splits.py), not "
+            "merged into a group -- safe, just conservative."
         )
-        _warn_uncovered_classes(rows, variants[0])
-    for v, n in per_variant.items():
-        flag = "" if n == EXPECTED_IMAGES else f"  <-- expected {EXPECTED_IMAGES}"
-        print(f"  {v}: {n} images{flag}")
+        _warn_uncovered_classes(rows, reference_variant)
 
-    _write_class_counts(root, rows, variants[0], classes)
+    per_variant = Counter(r["variant"] for r in rows)
+    for v, n in per_variant.items():
+        print(f"  {v}: {n} images across {len(kept_classes)} classes")
+
+    _write_class_counts(root, rows, reference_variant, kept_classes)
 
 
 def _warn_uncovered_classes(rows: list[dict], variant: str) -> None:
     """
-    Flag classes where leaf-map.json coverage is low/zero. Some classes (or
-    photography batches within a class) were never leaf-tracked upstream, so
-    there is no leaf identity to recover. Such images are excluded from the
-    default leak-safe split, rather than being treated as safe singleton groups.
+    Flag kept classes where leaf-map.json coverage is still low, short of the
+    zero-coverage classes build_manifest already dropped. A photography batch
+    within a class (not the whole class) can lack leaf tracking upstream --
+    those images are excluded from the default split, so the class survives
+    with fewer usable images rather than none.
     """
     per_class = Counter()
     per_class_matched = Counter()
@@ -249,7 +283,7 @@ def _warn_uncovered_classes(rows: list[dict], variant: str) -> None:
     ]
     if not flagged:
         return
-    print("  low/zero verified leaf-map coverage by class:")
+    print("  low verified leaf-map coverage by class (kept, but split will shrink):")
     for c, matched, n in sorted(flagged, key=lambda t: t[1] / t[2]):
         print(f"    {c}: {matched}/{n} ({100 * matched / n:.0f}%)")
 

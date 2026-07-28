@@ -4,7 +4,7 @@ src/interfaces.py.
 
 Contract (from interfaces.py):
     get_dataloaders(variant, ratio, seed, batch_size) -> (DataLoader, DataLoader)
-    yields (img: Tensor[B,3,224,224], label: Tensor[B]), labels 0..37
+    yields (img: Tensor[B,3,224,224], label: Tensor[B]), labels 0..num_classes-1
 
 `return_val` is a keyword-only argument with a default, so every existing call
 site keeps working unchanged and the frozen signature is not broken. GM2 opts
@@ -13,6 +13,12 @@ in when checkpointing best-by-val-F1.
 pin_memory is device-aware (CUDA only) rather than hardcoded True, since this
 file needs to run correctly on Apple Silicon (MPS, where pin_memory is
 unsupported) as well as CUDA boxes without anyone hand-editing it per machine.
+
+Label count: classes.json (written by prepare_data.py) only lists classes
+with at least one leaf-map-verified image -- classes where every image was an
+unverified singleton are dropped there, not just filtered out of the split.
+class_names() below reflects that count directly (30, not the original 38);
+src/interfaces.py's build_model(num_classes=30) already matches.
 """
 
 from __future__ import annotations
@@ -42,7 +48,16 @@ def class_names(data_root: Path = DATA_ROOT) -> list[str]:
 
 
 def label_of(relpath: str, data_root: Path = DATA_ROOT) -> int:
-    return class_names(data_root).index(relpath.split("/", 1)[0])
+    class_name = relpath.split("/", 1)[0]
+    try:
+        return class_names(data_root).index(class_name)
+    except ValueError:
+        raise ValueError(
+            f"{class_name!r} (from {relpath!r}) is not in classes.json. If this split "
+            "was generated with --include-unverified-leaves, it can reference classes "
+            "prepare_data.py drops for having zero verified leaf coverage -- regenerate "
+            "the split without that flag, or add the class back in classes.json."
+        ) from None
 
 
 # --------------------------------------------------------------------------
@@ -165,7 +180,7 @@ def get_dataloaders(
 class FakeDataset(Dataset):
     """Random tensors of the correct shape and label range."""
 
-    def __init__(self, n: int = 256, num_classes: int = 38, seed: int = 0):
+    def __init__(self, n: int = 256, num_classes: int = 30, seed: int = 0):
         g = torch.Generator().manual_seed(seed)
         self.x = torch.randn(n, 3, IMAGE_SIZE, IMAGE_SIZE, generator=g)
         self.y = torch.randint(0, num_classes, (n,), generator=g)

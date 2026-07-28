@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 from data import get_dataloaders
 from tqdm import tqdm
 
-def build_model(pretrained: bool, num_classes=38) -> nn.Module:
+def build_model(pretrained: bool, num_classes=30) -> nn.Module:
     model = None 
     if pretrained:
         model = torchvision.models.mobilenet_v2(weights=torchvision.models.MobileNet_V2_Weights.IMAGENET1K_V1)
@@ -52,7 +52,7 @@ def main(pretrained):
     variant, ratio, seed, batch_size, epochs = "color", 0.8, 42, 64, 5
     lr = 1e-4 if pretrained else 1e-3
     train_loader, val_loader, test_loader = get_dataloaders(variant, ratio, seed, batch_size, return_val=True, num_workers=4)
-    model = build_model(pretrained, num_classes=38).to(device)
+    model = build_model(pretrained, num_classes=30).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
 
     print(f"train images: {len(train_loader.dataset):,}  val images: {len(val_loader.dataset):,}  test images: {len(test_loader.dataset):,}")
