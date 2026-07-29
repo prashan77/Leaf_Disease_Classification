@@ -28,5 +28,9 @@ data/leaf_grouping
 images/
 
 
+
+
 #extras
-**.pdf
+**/*.pdf
+**/__pycache__/
+*.py[cod]
