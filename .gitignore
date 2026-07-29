@@ -24,3 +24,5 @@ TestResults.xml
 data/data.zip
 data/raw
 data/leaf_grouping
+.venv/
+images/

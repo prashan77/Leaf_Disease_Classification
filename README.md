@@ -27,12 +27,12 @@ splits/
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install torch torchvision numpy pillow huggingface_hub
+pip install torch torchvision numpy pillow huggingface_hub matplotlib
 ```
 
 (No `requirements.txt` yet -- these are the packages actually imported by
 `scripts/` and `src/` as of this commit: `torch` 2.13, `torchvision` 0.28,
-`numpy` 2.5, `Pillow` 12.3, `huggingface_hub` 1.24.)
+`numpy` 2.5, `Pillow` 12.3, `huggingface_hub` 1.24, `matplotlib`.)
 
 ## Rebuilding the data pipeline
 
