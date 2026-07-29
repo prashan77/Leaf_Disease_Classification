@@ -26,3 +26,11 @@ data/raw
 data/leaf_grouping
 .venv/
 images/
+
+
+
+
+#extras
+**/*.pdf
+**/__pycache__/
+*.py[cod]
