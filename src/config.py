@@ -3,9 +3,9 @@
 from pathlib import Path
 
 # Experiment
-ARCHITECTURE = "vanilla_cnn" 
-INITIALIZATION =  "scratch" 
-VARIANT = "color"
+ARCHITECTURE = "mobilenet_v2" 
+INITIALIZATION =  "pretrained" 
+VARIANT = "grayscale"
 RATIO = 0.8
 SEED = 42
 
