@@ -3,10 +3,10 @@
 from pathlib import Path
 
 # Experiment
-ARCHITECTURE = "mobilenet_v2"
-INITIALIZATION = "pretrained"
+ARCHITECTURE = "vanilla_cnn" 
+INITIALIZATION =  "scratch" 
 VARIANT = "color"
-RATIO = 0.2
+RATIO = 0.8
 SEED = 42
 
 # Training
@@ -21,7 +21,7 @@ NUM_WORKERS = 4
 DEVICE = "auto"
 AMP = True
 OUTPUT_DIR: Path | None = None
-OVERWRITE = False
+OVERWRITE = True
 
 
 def validate() -> None:
