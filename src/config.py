@@ -4,7 +4,7 @@ from pathlib import Path
 
 # Experiment
 ARCHITECTURE = "mobilenet_v2" 
-INITIALIZATION =  "pretrained" 
+INITIALIZATION =  "scratch" 
 VARIANT = "grayscale"
 RATIO = 0.8
 SEED = 42
