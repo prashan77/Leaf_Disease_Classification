@@ -1,0 +1,21 @@
+{
+  "architecture": "vanilla_cnn",
+  "variant": "grayscale",
+  "initialization": "scratch",
+  "ratio": 0.2,
+  "seed": 42,
+  "batch_size": 64,
+  "epochs": 20,
+  "learning_rate": 0.0001,
+  "weight_decay": 0.0001,
+  "warmup_epochs": 2,
+  "num_workers": 4,
+  "requested_device": "auto",
+  "requested_amp": true,
+  "device": "mps",
+  "amp": true,
+  "num_classes": 30,
+  "train_images": 7383,
+  "val_images": 810,
+  "test_images": 32918
+}
