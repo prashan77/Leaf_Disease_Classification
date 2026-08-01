@@ -5,11 +5,12 @@ from __future__ import annotations
 from torch import nn
 
 from src.models.mobilenet import MobileNetV2
+from src.models.resnet import ResNet50
 from src.models.vanilla_cnn import VanillaCNN
 
-ARCHITECTURES = ("mobilenet_v2", "vanilla_cnn")
+ARCHITECTURES = ("mobilenet_v2", "resnet50", "vanilla_cnn")
 
-__all__ = ["ARCHITECTURES", "MobileNetV2", "VanillaCNN", "build_model"]
+__all__ = ["ARCHITECTURES", "MobileNetV2", "ResNet50", "VanillaCNN", "build_model"]
 
 
 def build_model(
@@ -23,6 +24,14 @@ def build_model(
         if initialization not in {"pretrained", "scratch"}:
             raise ValueError(f"unsupported initialization: {initialization}")
         return MobileNetV2(
+            pretrained=initialization == "pretrained",
+            num_classes=num_classes,
+        )
+
+    if architecture == "resnet50":
+        if initialization not in {"pretrained", "scratch"}:
+            raise ValueError(f"unsupported initialization: {initialization}")
+        return ResNet50(
             pretrained=initialization == "pretrained",
             num_classes=num_classes,
         )

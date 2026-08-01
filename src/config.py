@@ -27,7 +27,7 @@ OVERWRITE = True
 def validate() -> None:
     """Check the values in this file before training starts."""
 
-    if ARCHITECTURE not in {"mobilenet_v2", "vanilla_cnn"}:
+    if ARCHITECTURE not in {"mobilenet_v2", "resnet50", "vanilla_cnn"}:
         raise ValueError(f"unsupported architecture: {ARCHITECTURE}")
     if INITIALIZATION not in {"pretrained", "scratch"}:
         raise ValueError(f"unsupported initialization: {INITIALIZATION}")
