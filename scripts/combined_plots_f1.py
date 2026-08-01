@@ -135,7 +135,7 @@ for variant in ["color", "grayscale"]:
     )
 
     fig.savefig(
-        f"{variant}_validation_f1.png",
+        f"results/report_plots/{variant}_validation_f1.png",
         dpi=300,
         bbox_inches="tight",
     )

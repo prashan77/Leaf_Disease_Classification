@@ -102,7 +102,7 @@ for variant, runs in figures.items():
     fig.tight_layout(rect=(0.04, 0.02, 1, 0.95))
 
     fig.savefig(
-        f"{variant}_gradcam_comparison.png",
+        f"results/report_plots/{variant}_gradcam_comparison.png",
         dpi=300,
         bbox_inches="tight",
     )

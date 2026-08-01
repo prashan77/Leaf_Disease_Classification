@@ -1,0 +1,16 @@
+model,true_class,predicted_class,error_count,true_class_total,error_rate_percent
+MobileNetV2 Pretrained,Potato - healthy,Soybean - healthy,2,32,6.25
+MobileNetV2 Pretrained,Cherry (including sour) - Powdery mildew,Apple - healthy,5,151,3.31
+MobileNetV2 Pretrained,Tomato - Late blight,Tomato - Early blight,4,184,2.17
+MobileNetV2 Pretrained,Peach - healthy,Peach - Bacterial spot,1,63,1.59
+MobileNetV2 Pretrained,Cherry (including sour) - Powdery mildew,Apple - Apple scab,2,151,1.32
+MobileNetV2 Scratch,Tomato - Spider mites Two-spotted spider mite,Tomato - healthy,44,336,13.10
+MobileNetV2 Scratch,"Pepper, bell - healthy",Soybean - healthy,39,317,12.30
+MobileNetV2 Scratch,Apple - Cedar apple rust,Tomato - Bacterial spot,6,56,10.71
+MobileNetV2 Scratch,Grape - Black rot,Grape - Esca (Black Measles),24,236,10.17
+MobileNetV2 Scratch,Potato - healthy,Soybean - healthy,3,32,9.38
+Vanilla CNN Scratch,Potato - healthy,Soybean - healthy,10,32,31.25
+Vanilla CNN Scratch,Potato - healthy,"Pepper, bell - healthy",8,32,25.00
+Vanilla CNN Scratch,Tomato - Spider mites Two-spotted spider mite,Tomato - healthy,78,336,23.21
+Vanilla CNN Scratch,Peach - healthy,Peach - Bacterial spot,10,63,15.87
+Vanilla CNN Scratch,Apple - Cedar apple rust,Tomato - Bacterial spot,7,56,12.50

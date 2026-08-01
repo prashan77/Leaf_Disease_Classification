@@ -1,3 +1,4 @@
+import csv
 import json
 from pathlib import Path
 
@@ -32,7 +33,7 @@ grid = fig.add_gridspec(
     right=0.94,
     bottom=0.12,
     top=0.84,
-    wspace=0.04,
+    wspace=0.08,
 )
 
 axes = [
@@ -120,10 +121,117 @@ fig.suptitle(
 )
 
 fig.savefig(
-    "color_80_confusion_matrices.png",
+    "results/report_plots/color_80_confusion_matrices.png",
     dpi=300,
     bbox_inches="tight",
     pad_inches=0.2,
 )
 
 plt.close(fig)
+
+def clean_name(name):
+    return name.replace("___", " - ").replace("_", " ")
+
+table_rows = []
+
+for model_name, summary_path in runs:
+    summary = json.loads(summary_path.read_text())
+
+    confusion = np.asarray(
+        summary["test"]["confusion_matrix"],
+        dtype=int,
+    )
+
+    model_errors = []
+
+    for true_index in range(len(class_names)):
+        true_total = int(confusion[true_index].sum())
+
+        for predicted_index in range(len(class_names)):
+            if true_index == predicted_index:
+                continue
+
+            error_count = int(
+                confusion[true_index, predicted_index]
+            )
+
+            if error_count == 0:
+                continue
+
+            error_rate = (
+                error_count / true_total
+                if true_total > 0
+                else 0
+            )
+
+            model_errors.append(
+                {
+                    "model": model_name,
+                    "true_class": clean_name(
+                        class_names[true_index]
+                    ),
+                    "predicted_class": clean_name(
+                        class_names[predicted_index]
+                    ),
+                    "error_count": error_count,
+                    "true_class_total": true_total,
+                    "error_rate_percent": error_rate * 100,
+                }
+            )
+
+    model_errors.sort(
+        key=lambda row: (
+            row["error_rate_percent"],
+            row["error_count"],
+        ),
+        reverse=True,
+    )
+
+    table_rows.extend(model_errors[:5])
+
+output_csv = Path("results/report_plots/top_color_confusions.csv")
+
+with output_csv.open("w", newline="") as file:
+    writer = csv.DictWriter(
+        file,
+        fieldnames=[
+            "model",
+            "true_class",
+            "predicted_class",
+            "error_count",
+            "true_class_total",
+            "error_rate_percent",
+        ],
+    )
+
+    writer.writeheader()
+
+    for row in table_rows:
+        csv_row = row.copy()
+        csv_row["error_rate_percent"] = (
+            f"{row['error_rate_percent']:.2f}"
+        )
+        writer.writerow(csv_row)
+
+print(
+    f"{'Model':<27} "
+    f"{'True class':<40} "
+    f"{'Predicted class':<40} "
+    f"{'Count':>7} "
+    f"{'Rate':>9}"
+)
+
+print("-" * 130)
+
+for row in table_rows:
+    print(
+        f"{row['model']:<27} "
+        f"{row['true_class']:<40} "
+        f"{row['predicted_class']:<40} "
+        f"{row['error_count']:>7} "
+        f"{row['error_rate_percent']:>8.2f}%"
+    )
+
+print()
+print("Created color_80_confusion_matrices.png")
+print(f"Created {output_csv}")
